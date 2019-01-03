@@ -260,7 +260,10 @@ wetSoundsRevo12HP_S4 =
 
 fc qtc = (qtc .*. Fs) ./. Qts
 
-f3 qtc = ((fc qtc) .*. Qts) ./. qtc
+fs qtc = ((fc qtc) .*. Qts) ./. qtc
+
+f3 qtc = (((  (((d 1) ./. (qtc .**. (d 2))) .-. (d 2)) .+.
+            (((((((d 1) ./. (qtc .**. (d 2))) .-. (d 2)) .**. (d 2)) .+. (d 4))) .**. (d 0.5)) ./. (d 2))) .**. (d 0.5)) .*. (fc qtc)
 
 -- * 4th order bandpass
 

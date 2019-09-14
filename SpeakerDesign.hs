@@ -1,9 +1,22 @@
 {-# language DataKinds #-}
 {-# language TypeOperators #-}
+{-# language OverloadedStrings #-}
+
+-- http://audiojudgement.com/sealed-enclosure-closed-box/
+-- https://engineering.purdue.edu/ece103/LectureNotes/SRS_Loudspeaker_Parameters.pdf
+-- https://www.linkwitzlab.com/thor-design.htm
+
+{-
+To graph the response of a speaker box, perhaps we convert it to an
+equivalent electrical model, and then use circuit analysis technics to
+calculate the response. Transfer Function ?
+-}
+
 module Main where
 
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Text (Text)
 
 default (Double)
 
@@ -21,15 +34,22 @@ Vt – Total volume (Vf+Vr) in liters.
 -}
 
 data DriverParameter
-  = Fs   -- Free Air Resonance
-  | Qes  -- Electrical “Q”
-  | Qms  -- Mechanical “Q”
-  | Qts  -- Total Speaker “Q”
-  | Vas  -- Equivalent Compliance
-  | Xmax -- One-Way Linear Excursion
-  | No   -- no - Reference Efficiency
-  | Sd   -- Effective Piston Area
-  | Re   -- DC Resistance
+  = Bl -- ^ product of magnetic field strength in voice coil gap and length of wire in magnetic field
+  | Cms  -- ^ The compliance of the suspension (the spider and the surround, to be exact). If the suspension is stiff, the driver is not compliant. So, the easy it is to move the speaker, the more compliant it is.
+  | Fs   -- ^ Free Air Resonance
+  | Le   -- ^ voice coil inductance
+  | Mms  -- ^ Mass of diaphragm
+  | No   -- ^ no - Reference Efficiency
+  | Qes  -- ^ Electrical “Q”
+  | Qms  -- ^ Mechanical “Q”
+  | Qts  -- ^ Total Speaker “Q”
+  | Qtc  -- ^ Total "Q" including damping of the box
+  | Re   -- ^ DC Resistance
+  | Rms  -- ^ mechanical resistance of driver's suspension
+  | Sd   -- ^ Effective Piston Area
+  | Vas  -- ^ Equivalent Compliance
+  | Vc   -- ^ Volume of the box
+  | Xmax -- ^ One-Way Linear Excursion
   deriving (Eq, Ord, Read, Show)
 
 data Value
@@ -135,7 +155,7 @@ evaluate driver formula =
   case formula of
     (Val v) -> Right v
     (DP p) ->
-      case Map.lookup p driver of
+      case Map.lookup p (_driverParams driver) of
         Nothing -> Left (MissingDriverParameter driver p)
         (Just v) -> Right v
     (Mul a b) ->
@@ -209,50 +229,78 @@ data Unit
     deriving (Eq, Ord, Read, Show)
 -}
 
-type Driver = Map DriverParameter Value
+-- * Drivers
+
+data Driver = Driver
+  { _driverName   :: Text
+  , _driverParams :: Map DriverParameter Value
+  }
+  deriving (Eq, Ord, Read, Show)
 
 jlAudioM10W5 :: Driver
-jlAudioM10W5 =
-  Map.fromList [ (Fs , V 31.55 Hz)
-               , (Qes, V 0.484 One)
-               , (Qms, V 8.948 One)
-               , (Qts, V 0.46 One)
-               , (Vas, V 44.75 L)
-               , (Xmax, V 13.2 MM)
-               , (No, V 0.28 Percent)
-               , (Sd, V 50.11 SqIn)
-               , (Re, V 3.602 Ohm)
-               ]
+jlAudioM10W5 = Driver
+  { _driverName = "JL Audio M10W5"
+  , _driverParams =
+       Map.fromList [ (Fs , V 31.55 Hz)
+                    , (Qes, V 0.484 One)
+                    , (Qms, V 8.948 One)
+                    , (Qts, V 0.46 One)
+                    , (Vas, V 44.75 L)
+                    , (Xmax, V 13.2 MM)
+                    , (No, V 0.28 Percent)
+                    , (Sd, V 50.11 SqIn)
+                    , (Re, V 3.602 Ohm)
+                    ]
+  }
 
 jlAudio10TW3_D4 :: Driver
-jlAudio10TW3_D4 =
-  Map.fromList [ (Fs, V 32.3 Hz)
-               , (Qes, V 0.656 One)
-               , (Qms, V 11.35 One)
-               , (Qts, V 0.62 One)
-               , (Vas, V 19.82 L)
-               , (Xmax, V 15.2 MM)
-               ]
+jlAudio10TW3_D4 = Driver
+  { _driverName = "JL Audio 10TW3-D4"
+  , _driverParams =
+      Map.fromList [ (Fs, V 32.3 Hz)
+                   , (Qes, V 0.656 One)
+                   , (Qms, V 11.35 One)
+                   , (Qts, V 0.62 One)
+                   , (Vas, V 19.82 L)
+                   , (Xmax, V 15.2 MM)
+                   ]
+  }
 
 wetSoundsRevo15XXXV4_B :: Driver
-wetSoundsRevo15XXXV4_B =
-  Map.fromList [ (Fs, V 35.0 Hz)
-               , (Qes, V 0.4 One)
-               , (Qms, V 6.00 One)
-               , (Qts, V 0.38 One)
-               , (Vas, V 24 L)
-               , (Xmax, V 23 MM)
-               ]
+wetSoundsRevo15XXXV4_B = Driver
+  { _driverName = "WetSounds Revo 15 XXX V4-B"
+  , _driverParams =
+      Map.fromList [ (Fs, V 35.0 Hz)
+                   , (Qes, V 0.4 One)
+                   , (Qms, V 6.00 One)
+                   , (Qts, V 0.38 One)
+                   , (Vas, V 24 L)
+                   , (Xmax, V 23 MM)
+                   ]
+  }
 
 wetSoundsRevo12HP_S4 :: Driver
-wetSoundsRevo12HP_S4 =
-  Map.fromList [ (Fs, V 30.0 Hz)
-               , (Qes, V 0.51 One)
-               , (Qms, V 3.80 One)
-               , (Qts, V 0.45 One)
-               , (Vas, V 46.5 L)
-               , (Xmax, V 11.9 MM) -- printed as 1.9mm in PDF -- probably a typo?
-               ]
+wetSoundsRevo12HP_S4 = Driver
+  { _driverName = "WetSounds Revo 12 HP-S4"
+  , _driverParams =
+      Map.fromList [ (Fs, V 30.0 Hz)
+                   , (Qes, V 0.51 One)
+                   , (Qms, V 3.80 One)
+                   , (Qts, V 0.45 One)
+                   , (Vas, V 46.5 L)
+                   , (Xmax, V 11.9 MM) -- printed as 1.9mm in PDF -- probably a typo?
+                   ]
+  }
+
+-- allDrivers
+
+allDrivers :: [Driver]
+allDrivers =
+  [ jlAudioM10W5, jlAudio10TW3_D4, wetSoundsRevo15XXXV4_B, wetSoundsRevo12HP_S4 ]
+
+-- * General forumlas
+
+ebp = Fs ./. Qes
 
 -- * sealed box
 

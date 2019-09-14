@@ -8,6 +8,9 @@
 -- https://www.linkwitzlab.com/thor-design.htm
 -- http://www.faqs.org/faqs/car-audio/part3/
 -- http://audiojudgement.com/thiele-small-parameters-explained/
+-- http://audiojudgement.com/speaker-equivalent-circuit/
+-- https://circuitdigest.com/electronic-circuits/simulate-speaker-with-equivalent-rlc-circuit
+-- https://en.wikibooks.org/wiki/Engineering_Acoustics/Transducers_-_Loudspeaker
 
 {-
 To graph the response of a speaker box, perhaps we convert it to an
@@ -15,6 +18,11 @@ equivalent electrical model, and then use circuit analysis technics to
 calculate the response. Transfer Function ?
 -}
 
+{-
+http://tamivox.org/dave/speaker/graphs.html
+
+A convenient text notation for this wiring is Ser (Par (R1, L1, C1), R2, L2) where Ser stands for series and Par for parallel. In this report, this model is called RLC-RL. 
+-}
 module Main where
 
 import Data.Map (Map)
@@ -52,6 +60,7 @@ data ThieleSmall
   | Le   -- ^ voice coil inductance
   | Mas  -- ^ Acoustic equivalent of Mms
   | Mms  -- ^ Mass of diaphragm
+  | Mmd  -- ^ total moving mass
   | N0   -- ^ no - Reference Efficiency
   | Pa   -- ^ Accoustical power
   | Pe   -- ^ Electrical power
@@ -64,15 +73,18 @@ data ThieleSmall
   | Q1   -- ^ System's “Q” @ Fb due to leakage losses
   | Qa   -- ^ System's “Q” @ Fb due to absorption losses
   | Qp   -- ^ System's “Q” @ Fb due to port losses
-  | Re   -- ^ Driver DC Resistance
-  | Rg   -- ^ Amplifier DC Resistance
   | Ras  -- ^ Accoustice equivalent of Rms
+  | Re   -- ^ Driver DC Resistance
   | Res  -- ^ The electrical resistive equivalent of Rms
+  | Rg   -- ^ Amplifier DC Resistance
   | Rms  -- ^ mechanical resistance of driver's suspension
   | Sd   -- ^ Effective Piston Area
   | Vas  -- ^ Equivalent Compliance
   | Vc   -- ^ Volume of the box
   | Vd   -- ^ Maximum linear volume of the displacement of the driver (Sd * Xmax)
+  | Xmag -- ^ Excursion limit due to the magnetic limitations of the driver's motor.  Xmag is defined as the displacement at which the BL product has fallen to 70% of its value at the cone's rest position.
+  | Xmech -- ^ Maximum physical excursion capability of the driver.  Exceeding Xmech normally results in damage to the driver.
+  | Xsus -- ^ Excursion limit due to the driver's suspension.  Xsus is defined as the point at which the compliance of the suspension has decreased to 25% of the value at the cone's rest position.
   | Xmax -- ^ One-Way Linear Excursion -- one way or two way?
   deriving (Eq, Ord, Read, Show)
 
@@ -159,18 +171,16 @@ data UnitError =
   IncompatibleUnits Formula Unit Unit
   deriving (Eq, Ord, Read, Show)
 
-mUnit :: Unit -> Unit -> Either UnitError Unit
-mUnit IN IN = Right SqIn
-mUnit a One = Right a
-mUnit One b = Right b
-mUnit a b = Right (Multiply a b)
--- mUnit a b = Left (IncompatibleUnits a b)
+mUnit :: Unit -> Unit -> Unit
+mUnit IN IN = SqIn
+mUnit a One = a
+mUnit One b = b
+mUnit a b = (Multiply a b)
 
-dUnit :: Unit -> Unit -> Either UnitError Unit
-dUnit a b | a == b = Right One
-dUnit a One = Right a
-dUnit a b = Right $ Divide a b
--- dUnit a b = Left (IncompatibleUnits a b)
+dUnit :: Unit -> Unit -> Unit
+dUnit a b | a == b = One
+dUnit a One = a
+dUnit a b = Divide a b
 
 data EvalError
      = MissingThieleSmall Driver ThieleSmall
@@ -192,10 +202,8 @@ evaluate driver formula =
           case evaluate driver b of
             (Left e) -> Left e
             (Right (V b' ub)) ->
-              case mUnit ua ub of
-                (Left ue) -> Left (UnitError ue)
-                (Right uc) ->
-                  Right $ V (a' * b') uc
+              Right $ V (a' * b') (mUnit ua ub)
+
     (Div a b) ->
       case evaluate driver a of
         (Left e) -> Left e
@@ -203,10 +211,7 @@ evaluate driver formula =
           case evaluate driver b of
             (Left e) -> Left e
             (Right (V b' ub)) ->
-              case dUnit ua ub of
-                (Left ue) -> Left (UnitError ue)
-                (Right uc) ->
-                  Right $ V (a' / b') uc
+                  Right $ V (a' / b') (dUnit ua ub)
     (Power a b) ->
       case evaluate driver a of
         (Left e) -> Left e
@@ -379,6 +384,11 @@ p = V 1.8 (Divide Kg (Multiply (Multiply M M) M))
 
 ebp :: Formula
 ebp = Fs ./. Qes
+
+cmens = Mmd ./. (Bl .*. Bl)
+lsc = Cms .*. (Bl .*. Bl)
+rsr = (Bl .*. Bl) ./. Rms
+
 
 -- * sealed box
 
